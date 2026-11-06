@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>网页发布器 · 本地网页一键上线</title>
+<meta name="description" content="拖入网页文件，自动创建 GitHub 仓库、推送内容、开启 Pages，直接拿到线上地址。纯前端，不需要安装，不需要命令行。">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    --bg: #f5f7f6;
+    --card: #ffffff;
+    --line: #dfe4e2;
+    --text: #17201d;
+    --muted: #667471;
+    --accent: #1f883d;
+    --accent-dark: #1a7f37;
+    --danger: #cf222e;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(16, 32, 24, .04), 0 8px 24px rgba(16, 32, 24, .05);
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { width: min(880px, 100%); margin: 0 auto; padding: clamp(16px, 4vw, 40px) clamp(12px, 3vw, 24px) 64px; }
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  h1 { font-size: clamp(20px, 5vw, 26px); line-height: 1.25; margin: 0 0 4px; letter-spacing: -.4px; }
+  .sub { color: var(--muted); font-size: clamp(12px, 3.4vw, 14px); margin: 0; }
+  .badge { font-size: 12px; color: var(--accent-dark); background: #eaf7ee; border: 1px solid #c9ead3; border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: clamp(14px, 3vw, 20px); margin-bottom: 14px; }
+  .card h2 { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; font-weight: 700; }
+
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row > * { min-width: 0; }
+  input[type=text], input[type=password] {
+    flex: 1 1 220px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+    font: inherit; background: #fff; color: inherit; min-width: 0;
+  }
+  input[type=text]:focus, input[type=password]:focus { outline: 2px solid #b7e4c4; border-color: var(--accent); }
+  label.check { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); padding: 6px 0; }
+  label.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+  button {
+    font: inherit; cursor: pointer; border-radius: 10px; padding: 10px 16px;
+    border: 1px solid var(--line); background: #fff; color: var(--text);
+  }
+  button:hover { background: #f2f5f4; }
+  button.primary { background: var(--accent); border-color: var(--accent-dark); color: #fff; font-weight: 600; }
+  button.primary:hover { background: var(--accent-dark); }
+  button.danger { background: var(--danger); border-color: #a40e26; color: #fff; font-weight: 600; }
+  button.danger:hover { background: #a40e26; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  button.link { border: 0; background: none; color: #0a6cbf; padding: 4px 2px; }
+  button.link:hover { text-decoration: underline; background: none; }
+  button.wide { width: 100%; padding: 13px 16px; font-size: 16px; }
+
+  #drop {
+    border: 2px dashed #c3ccc9; border-radius: var(--radius); padding: clamp(20px, 6vw, 36px) 16px;
+    text-align: center; cursor: pointer; background: #fbfdfc; transition: .18s;
+  }
+  #drop.over { border-color: var(--accent); background: #f0fbf3; }
+  #drop strong { display: block; font-size: clamp(14px, 4vw, 16px); margin-bottom: 4px; }
+  #drop span { color: var(--muted); font-size: 13px; }
+  #picked { margin-top: 10px; font-size: 13px; color: var(--muted); }
+
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 4px; }
+  .step { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #7d8b88; background: #f6f8f7; border-radius: 8px; padding: 7px 8px; overflow: hidden; }
+  .step .mark { color: #9aa8a5; }
+  .step[data-state=running] { background: #eef4ff; color: #0a6cbf; }
+  .step[data-state=running] .mark { color: #0a6cbf; }
+  .step[data-state=done] { background: #eaf7ee; color: var(--accent-dark); }
+  .step[data-state=done] .mark { color: var(--accent-dark); }
+  .step[data-state=error] { background: #fdeef0; color: var(--danger); }
+  .step[data-state=error] .mark { color: var(--danger); }
+
+  #status { font-size: 13px; color: var(--muted); min-height: 20px; margin: 6px 0 0; }
+  #status[data-kind=ok] { color: var(--accent-dark); }
+  #status[data-kind=error] { color: var(--danger); }
+  #status[data-kind=ready] { color: #0a6cbf; }
+
+  #log {
+    margin: 0; height: clamp(140px, 26vh, 260px); overflow: auto; background: #fbfcfc;
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    font: 12px/1.55 "Cascadia Mono", Consolas, ui-monospace, monospace;
+    white-space: pre-wrap; word-break: break-word; color: #2b3a36;
+  }
+  #result { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px; border: 1px solid #c9ead3; background: #f4fcf6; border-radius: 10px; margin-bottom: 14px; }
+  #url { font-weight: 700; color: #0a6cbf; text-decoration: none; word-break: break-all; font-size: clamp(13px, 3.6vw, 15px); }
+  #url:hover { text-decoration: underline; }
+
+  .note { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+  .note code { background: #eef2f1; padding: 1px 5px; border-radius: 5px; font-size: 11px; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 22px; }
+  details summary { cursor: pointer; font-size: 13px; color: #0a6cbf; }
+  details[open] summary { margin-bottom: 8px; }
+
+  @media (max-width: 640px) {
+    .steps { grid-template-columns: repeat(2, 1fr); }
+    .row > button { flex: 1 1 auto; }
+    #result { align-items: flex-start; }
+  }
+  @media (max-width: 380px) {
+    .steps { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>网页发布器</h1>
+      <p class="sub">拖入网页文件夹或 index.html → 自动建仓库、推送、开 Pages，直接给你网址。</p>
+    </div>
+    <span class="badge">纯前端 · 不装软件</span>
+  </header>
+
+  <section class="card">
+    <h2>1 · 授权</h2>
+    <div class="row">
+      <input type="password" id="token" placeholder="GitHub 令牌：ghp_… 或 github_pat_…（勾选 repo 权限）" autocomplete="off" spellcheck="false">
+      <button id="verify" type="button">验证</button>
+    </div>
+    <label class="check"><input type="checkbox" id="remember"> 在这台设备的浏览器里记住令牌</label>
+    <p class="note">
+      令牌只保存在你本机浏览器（<code>localStorage</code>），只会发往 <code>api.github.com</code>，不经过任何第三方服务器。
+      建议用只含 <code>repo</code> 权限的经典令牌，用完可以随时吊销。不勾选「记住」则关闭页面即失效。
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>2 · 选择网页</h2>
+    <div id="drop" role="button" tabindex="0">
+      <strong>把网页文件夹，或 index.html 拖到这里</strong>
+      <span>也可以点这里选择</span>
+    </div>
+    <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
+    <input type="file" id="file-input" accept=".html,.htm" hidden>
+    <div class="row" style="margin-top:10px">
+      <button id="pick-folder" type="button">选择文件夹</button>
+      <button id="pick-files" type="button">选择 HTML 文件</button>
+      <button id="clear" type="button" class="link">清除选择</button>
+    </div>
+    <div id="picked"></div>
+  </section>
+
+  <section class="card">
+    <h2>3 · 选项</h2>
+    <div class="row" style="margin-bottom:6px">
+      <input type="text" id="repo" placeholder="仓库名（留空自动生成，只支持英文数字和 - _ .）" spellcheck="false">
+    </div>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="overwrite"> 覆盖同名仓库</label>
+      <label class="check"><input type="checkbox" id="private"> 私有仓库（免费账号无法发布 Pages）</label>
+      <label class="check"><input type="checkbox" id="allow-secrets"> 忽略密钥检查</label>
+    </div>
+  </section>
+
+  <button id="publish" class="primary wide" type="button" disabled>开始发布</button>
+  <p id="status"></p>
+
+  <div id="result" hidden>
+    <a id="url" href="#" target="_blank" rel="noopener"></a>
+    <button id="copy" class="link" type="button">复制链接</button>
+  </div>
+
+  <section class="card">
+    <h2>进度</h2>
+    <div class="steps">
+      <div class="step"><span class="mark">○</span>校验 GitHub 账号</div>
+      <div class="step"><span class="mark">○</span>分析站点内容</div>
+      <div class="step"><span class="mark">○</span>预处理文件</div>
+      <div class="step"><span class="mark">○</span>创建 / 复用仓库</div>
+      <div class="step"><span class="mark">○</span>上传文件</div>
+      <div class="step"><span class="mark">○</span>开启 GitHub Pages</div>
+      <div class="step"><span class="mark">○</span>等待构建完成</div>
+      <div class="step"><span class="mark">○</span>上线验收</div>
+    </div>
+    <h2 style="margin-top:16px">日志</h2>
+    <pre id="log"></pre>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>它会自动处理哪些坑 / 有哪些限制</summary>
+      <p class="note">
+        <strong>自动处理：</strong>根路径 <code>/css/a.css</code> 转相对路径（项目站点在子路径下）、引用大小写与真实文件名对齐、
+        补 <code>.nojekyll</code>（否则 <code>_next</code> 这类目录被忽略）、单页应用补 <code>404.html</code>、
+        排除 <code>node_modules</code> 和隐藏垃圾文件、识别藏在 <code>dist/</code> 里的站点根、
+        发布前检查超大文件（&gt;100MB）和疑似密钥（命中直接拦下）。
+        <br><br>
+        <strong>限制：</strong>免费账号只能从公开仓库发布 Pages；站点上限 1GB、单文件 100MB；
+        Pages 构建约 10 次/小时；只托管静态文件，没有后端；
+        源码项目（需要 <code>npm run build</code>）请先在本地构建，再拖 <code>dist/</code> 进来。
+        非 UTF-8 编码的页面会原样上传、不做引用改写。
+      </p>
+    </details>
+  </section>
+
+  <footer>纯静态页面 · 浏览器直接调 GitHub API，没有中间服务器</footer>
+</div>
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>
